@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'services/ad_service.dart';
 import 'state/app_state.dart';
 import 'theme/app_theme.dart';
 import 'screens/welcome_screen.dart';
@@ -32,9 +31,6 @@ class _LevelUpAppState extends State<LevelUpApp> {
     if (!mounted) return;
     setState(() {
       _showWelcome = !_appState.welcomeShown;
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      AdService().initialize();
     });
   }
 

@@ -21,16 +21,33 @@ void main() {
     expect(appState.wordsForLevel('B2').length, 606);
     expect(appState.wordsForLevel('C1').length, 1268);
 
+    bool finished = false;
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.darkTheme,
-        home: WelcomeScreen(appState: appState, onFinished: () {}),
+        home: WelcomeScreen(
+          appState: appState,
+          onFinished: () => finished = true,
+        ),
       ),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('Изучение слов: уровень'), findsOneWidget);
     expect(find.text('Пропустить'), findsOneWidget);
+
+    // Tap "Продолжить →" through all 3 slides and complete onboarding
+    await tester.tap(find.text('Продолжить →'));
+    await tester.pumpAndSettle();
+    expect(find.text('Обучение по карточкам'), findsOneWidget);
+
+    await tester.tap(find.text('Продолжить →'));
+    await tester.pumpAndSettle();
+    expect(find.text('Квизы и отслеживание прогресса'), findsOneWidget);
+
+    await tester.tap(find.text('Начать обучение'));
+    await tester.pumpAndSettle();
+    expect(finished, isTrue);
   });
 
   testWidgets('MainTabsScreen renders all 5 tabs and CEFR levels',

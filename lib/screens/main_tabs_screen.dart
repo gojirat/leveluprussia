@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/ad_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/yandex_banner_widget.dart';
@@ -19,6 +20,14 @@ class MainTabsScreen extends StatefulWidget {
 
 class _MainTabsScreenState extends State<MainTabsScreen> {
   int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AdService().initialize();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

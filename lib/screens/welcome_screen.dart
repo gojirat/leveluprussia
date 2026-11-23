@@ -46,6 +46,22 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     widget.onFinished();
   }
 
+  void _handleNext() {
+    if (_page >= _slides.length - 1) {
+      _complete();
+    } else {
+      final nextPage = _page + 1;
+      setState(() => _page = nextPage);
+      if (_controller.hasClients) {
+        _controller.animateToPage(
+          nextPage,
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    }
+  }
+
   @override
   void dispose() {
     _controller.dispose();
@@ -161,20 +177,14 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             ),
             const SizedBox(height: 28),
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
               child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () {
-                    if (isLast) {
-                      _complete();
-                    } else {
-                      _controller.nextPage(
-                        duration: const Duration(milliseconds: 280),
-                        curve: Curves.easeOutCubic,
-                      );
-                    }
-                  },
+                  onPressed: _handleNext,
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(54),
+                  ),
                   child: Text(isLast ? 'Начать обучение' : 'Продолжить →'),
                 ),
               ),
