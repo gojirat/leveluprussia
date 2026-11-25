@@ -28,8 +28,6 @@
 	<true/>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
-	<key>UIUserInterfaceStyle</key>
-	<string>Dark</string>
 	<key>NSSpeechSynthesisUsageDescription</key>
 	<string>Приложение использует синтез речи для озвучивания произношения английских слов.</string>
 	<key>NSUserTrackingUsageDescription</key>

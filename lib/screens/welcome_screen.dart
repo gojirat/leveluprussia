@@ -22,22 +22,28 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   static const _slides = [
     _SlideData(
-      image: 'assets/images/app_icon_1024.png',
+      useAppIcon: true,
+      icon: Icons.school_rounded,
+      color: AppColors.primary,
       title: 'Изучение слов: уровень',
       description:
-          'Изучайте английские слова с помощью интерактивных флешкарт и квизов. Отслеживайте прогресс и осваивайте словарный запас в своём темпе.',
+          'Интервальное повторение SM-2, аудирование с регулировкой скорости и игра «Найди пары» для быстрого запоминания английской лексики.',
     ),
     _SlideData(
-      image: 'assets/images/level-book.png',
-      title: 'Обучение по карточкам',
+      useAppIcon: false,
+      icon: Icons.headphones_rounded,
+      color: AppColors.accent,
+      title: 'Аудирование и мини-игры',
       description:
-          'Изучайте слова с помощью интерактивных карточек. Переворачивайте карточки, чтобы увидеть переводы, и практикуйте произношение со встроенным синтезом речи.',
+          'Тренируйте восприятие на слух в обычном и замедленном темпе 0.7×, закрепляйте перевод в игре на скорость и проверяйте правописание.',
     ),
     _SlideData(
-      image: 'assets/images/progress-hero-bg.png',
-      title: 'Квизы и отслеживание прогресса',
+      useAppIcon: false,
+      icon: Icons.library_books_rounded,
+      color: AppColors.emerald,
+      title: 'Свой словарь и дневная цель',
       description:
-          'Проверяйте свои знания с помощью квизов с множественным выбором и вводом текста. Следите за статистикой, сериями и достижениями.',
+          'Более 4 100 слов по уровням A1–C1 плюс возможность добавлять собственные слова с заметками и отслеживать активность по дням недели.',
     ),
   ];
 
@@ -72,124 +78,141 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   Widget build(BuildContext context) {
     final isLast = _page == _slides.length - 1;
     return Scaffold(
-      backgroundColor: AppColors.bgPrimary,
       body: SafeArea(
-        child: Column(
-          children: [
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: _complete,
-                child: const Text(
-                  'Пропустить',
-                  style: TextStyle(color: AppColors.textSecondary),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: Column(
+              children: [
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 12, top: 4),
+                    child: TextButton(
+                      onPressed: _complete,
+                      child: Text(
+                        'Пропустить',
+                        style: TextStyle(
+                          color: AppColors.secondaryText(context),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            Expanded(
-              child: PageView.builder(
-                controller: _controller,
-                itemCount: _slides.length,
-                onPageChanged: (i) => setState(() => _page = i),
-                itemBuilder: (context, index) {
-                  final slide = _slides[index];
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 28),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          height: 220,
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(24),
-                            color: AppColors.bgCard,
-                            border: Border.all(color: AppColors.border),
-                          ),
-                          clipBehavior: Clip.antiAlias,
-                          child: Padding(
-                            padding: index == 2
-                                ? EdgeInsets.zero
-                                : const EdgeInsets.all(24),
-                            child: index == 0
-                                ? Center(
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(34),
+                Expanded(
+                  child: PageView.builder(
+                    controller: _controller,
+                    itemCount: _slides.length,
+                    onPageChanged: (i) => setState(() => _page = i),
+                    itemBuilder: (context, index) {
+                      final slide = _slides[index];
+                      return Center(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 8),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                            Container(
+                              height: 210,
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(28),
+                                color: slide.color.withValues(alpha: 0.1),
+                                border: Border.all(
+                                  color: slide.color.withValues(alpha: 0.25),
+                                ),
+                              ),
+                              alignment: Alignment.center,
+                              child: slide.useAppIcon
+                                  ? ClipRRect(
+                                      borderRadius: BorderRadius.circular(32),
                                       child: Image.asset(
-                                        slide.image,
-                                        width: 156,
-                                        height: 156,
+                                        'assets/images/app_icon_1024.png',
+                                        width: 148,
+                                        height: 148,
                                         fit: BoxFit.cover,
                                       ),
+                                    )
+                                  : Container(
+                                      width: 112,
+                                      height: 112,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color:
+                                            slide.color.withValues(alpha: 0.18),
+                                      ),
+                                      child: Icon(
+                                        slide.icon,
+                                        size: 56,
+                                        color: slide.color,
+                                      ),
                                     ),
-                                  )
-                                : Image.asset(
-                                    slide.image,
-                                    fit: index == 2
-                                        ? BoxFit.cover
-                                        : BoxFit.contain,
-                                  ),
+                            ),
+                            const SizedBox(height: 34),
+                            Text(
+                              slide.title,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 26,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.primaryText(context),
+                                letterSpacing: -0.4,
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            Text(
+                              slide.description,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 15.5,
+                                color: AppColors.secondaryText(context),
+                                height: 1.5,
+                              ),
+                            ),
+                              ],
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 36),
-                        Text(
-                          slide.title,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.textPrimary,
-                            letterSpacing: -0.4,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        Text(
-                          slide.description,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 15.5,
-                            color: AppColors.textSecondary,
-                            height: 1.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-            // Dots
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(_slides.length, (i) {
-                final active = i == _page;
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 220),
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  width: active ? 26 : 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: active ? AppColors.primary : AppColors.borderLight,
-                    borderRadius: BorderRadius.circular(4),
+                        );
+                    },
                   ),
-                );
-              }),
-            ),
-            const SizedBox(height: 28),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _handleNext,
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(54),
-                  ),
-                  child: Text(isLast ? 'Начать обучение' : 'Продолжить →'),
                 ),
-              ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(_slides.length, (i) {
+                    final active = i == _page;
+                    return AnimatedContainer(
+                      duration: const Duration(milliseconds: 220),
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      width: active ? 28 : 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: active
+                            ? AppColors.primary
+                            : AppColors.cardBorder(context),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 28),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _handleNext,
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(54),
+                      ),
+                      child: Text(isLast ? 'Начать обучение' : 'Продолжить →'),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -197,12 +220,16 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 }
 
 class _SlideData {
-  final String image;
+  final bool useAppIcon;
+  final IconData icon;
+  final Color color;
   final String title;
   final String description;
 
   const _SlideData({
-    required this.image,
+    required this.useAppIcon,
+    required this.icon,
+    required this.color,
     required this.title,
     required this.description,
   });

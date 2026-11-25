@@ -1,15 +1,20 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import '../models/word_item.dart';
 import '../models/learning_models.dart';
+import '../services/review_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/achievement_detail_modal.dart';
 import '../widgets/cefr_badge.dart';
+import 'settings_screen.dart';
 
 class ProgressScreen extends StatelessWidget {
   final AppState appState;
 
   const ProgressScreen({super.key, required this.appState});
+
+  static const _weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
   @override
   Widget build(BuildContext context) {
@@ -18,12 +23,15 @@ class ProgressScreen extends StatelessWidget {
       builder: (context, _) {
         final learned = appState.totalLearnedCount;
         final mastered = appState.totalMasteredCount;
-        final totalWords = appState.words.length;
         final streak = appState.streak;
         final accuracy = appState.overallAccuracy;
-        final sessionsCount = appState.sessions.length;
-        final totalMins = appState.totalStudySeconds ~/ 60;
         final unlocked = appState.unlockedAchievements;
+        final week = appState.last7DaysStats;
+        final maxDayWords = max(
+          appState.settings.dailyGoalWords,
+          week.fold<int>(0, (m, d) => max(m, d.wordsReviewed)),
+        );
+        final isDark = appState.settings.isDarkMode;
 
         return SafeArea(
           child: SingleChildScrollView(
@@ -31,122 +39,192 @@ class ProgressScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Ваш прогресс',
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                  ),
+                // Header + Settings + Theme toggle
+                Row(
+                  children: [
+                    Text(
+                      'Прогресс',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primaryText(context),
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton.outlined(
+                      tooltip: isDark ? 'Светлая тема' : 'Тёмная тема',
+                      onPressed: () => appState.updateSettings(
+                        appState.settings.copyWith(isDarkMode: !isDark),
+                      ),
+                      icon: Icon(
+                        isDark
+                            ? Icons.light_mode_rounded
+                            : Icons.dark_mode_rounded,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton.outlined(
+                      tooltip: 'Настройки',
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => SettingsScreen(appState: appState),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.settings_rounded),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 16),
 
-                // Progress Hero Card with original progress-hero-bg.png
-                Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.35),
-                    ),
-                    image: const DecorationImage(
-                      image: AssetImage('assets/images/progress-hero-bg.png'),
-                      fit: BoxFit.cover,
-                      colorFilter: ColorFilter.mode(
-                        Color(0x66080D17),
-                        BlendMode.darken,
-                      ),
-                    ),
-                  ),
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Общая статистика',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '$learned из $totalWords',
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 28,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _HeroMiniStat(
-                              iconAsset: 'assets/images/progress-learned.png',
-                              label: 'Изучено слов',
-                              value: '$learned',
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _HeroMiniStat(
-                              iconAsset: 'assets/images/progress-mastered.png',
-                              label: 'Освоено слов',
-                              value: '$mastered',
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 14),
-
-                // Streak + Accuracy + Sessions row
+                // Top 3 KPI Cards
                 Row(
                   children: [
                     Expanded(
-                      child: _MetricCard(
-                        icon: Icons.local_fire_department_rounded,
-                        iconColor: AppColors.amber,
-                        value: '${streak.currentStreak} дн.',
-                        label: 'Текущая серия',
-                        sublabel: 'Лучшая: ${streak.bestStreak}',
+                      child: _KpiBox(
+                        icon: Icons.check_circle_rounded,
+                        color: AppColors.primary,
+                        value: '$learned',
+                        label: 'Изучено',
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: _MetricCard(
-                        icon: Icons.track_changes_rounded,
-                        iconColor: AppColors.emerald,
-                        value: '$accuracy%',
-                        label: 'Точность',
-                        sublabel: 'Сессий: $sessionsCount · $totalMinsм',
+                      child: _KpiBox(
+                        icon: Icons.verified_rounded,
+                        color: AppColors.emerald,
+                        value: '$mastered',
+                        label: 'Освоено',
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _KpiBox(
+                        icon: Icons.local_fire_department_rounded,
+                        color: AppColors.amber,
+                        value: '${streak.currentStreak} дн.',
+                        label: 'Серия ($accuracy%)',
                       ),
                     ),
                   ],
                 ),
 
-                const SizedBox(height: 24),
-                const Text(
-                  'Прогресс по уровням',
+                const SizedBox(height: 18),
+
+                // 7-Day Activity Bar Chart
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: AppColors.cardBg(context),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.cardBorder(context)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'Активность за 7 дней',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.primaryText(context),
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            'Цель: ${appState.settings.dailyGoalWords}/день',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.secondaryText(context),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      SizedBox(
+                        height: 120,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: week.map((d) {
+                            final dt = DateTime.tryParse(d.date) ??
+                                DateTime.now();
+                            final label = _weekdays[(dt.weekday - 1) % 7];
+                            final ratio = maxDayWords == 0
+                                ? 0.0
+                                : (d.wordsReviewed / maxDayWords)
+                                    .clamp(0.06, 1.0);
+                            final metGoal = d.wordsReviewed >=
+                                appState.settings.dailyGoalWords;
+                            return Expanded(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  if (d.wordsReviewed > 0)
+                                    Text(
+                                      '${d.wordsReviewed}',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color:
+                                            AppColors.secondaryText(context),
+                                      ),
+                                    ),
+                                  const SizedBox(height: 4),
+                                  Container(
+                                    width: 20,
+                                    height: 74 * ratio,
+                                    decoration: BoxDecoration(
+                                      color: metGoal
+                                          ? AppColors.emerald
+                                          : d.wordsReviewed > 0
+                                              ? AppColors.primary
+                                              : AppColors.cardBorder(context),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    label,
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.mutedText(context),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // CEFR breakdown
+                Text(
+                  'Уровни CEFR',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
+                    color: AppColors.primaryText(context),
                   ),
                 ),
-                const SizedBox(height: 12),
-
+                const SizedBox(height: 10),
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppColors.bgCard,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: AppColors.border),
+                    color: AppColors.cardBg(context),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.cardBorder(context)),
                   ),
                   child: Column(
                     children: CefrLevelInfo.all.map((info) {
@@ -156,7 +234,7 @@ class ProgressScreen extends StatelessWidget {
                       final ratio = total == 0 ? 0.0 : lvlLearned / total;
                       final color = AppColors.levelColor(info.code);
                       return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        padding: const EdgeInsets.symmetric(vertical: 7),
                         child: Column(
                           children: [
                             Row(
@@ -166,8 +244,8 @@ class ProgressScreen extends StatelessWidget {
                                 Expanded(
                                   child: Text(
                                     info.subtitle,
-                                    style: const TextStyle(
-                                      color: AppColors.textPrimary,
+                                    style: TextStyle(
+                                      color: AppColors.primaryText(context),
                                       fontWeight: FontWeight.w600,
                                       fontSize: 14,
                                     ),
@@ -175,21 +253,21 @@ class ProgressScreen extends StatelessWidget {
                                 ),
                                 Text(
                                   '$lvlLearned / $total',
-                                  style: const TextStyle(
-                                    color: AppColors.textSecondary,
+                                  style: TextStyle(
+                                    color: AppColors.secondaryText(context),
                                     fontSize: 12.5,
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 7),
+                            const SizedBox(height: 6),
                             ClipRRect(
                               borderRadius: BorderRadius.circular(4),
                               child: LinearProgressIndicator(
                                 value: ratio,
                                 minHeight: 6,
-                                backgroundColor: AppColors.bgSecondary,
+                                backgroundColor: color.withValues(alpha: 0.14),
                                 valueColor: AlwaysStoppedAnimation(color),
                               ),
                             ),
@@ -200,15 +278,17 @@ class ProgressScreen extends StatelessWidget {
                   ),
                 ),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 22),
+
+                // Achievements
                 Row(
                   children: [
-                    const Text(
+                    Text(
                       'Достижения',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
+                        color: AppColors.primaryText(context),
                       ),
                     ),
                     const Spacer(),
@@ -216,23 +296,22 @@ class ProgressScreen extends StatelessWidget {
                       '${unlocked.length} / ${AchievementDef.all.length}',
                       style: const TextStyle(
                         color: AppColors.emerald,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-
+                const SizedBox(height: 10),
                 GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: AchievementDef.all.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount:
+                        MediaQuery.of(context).size.width >= 720 ? 5 : 3,
                     mainAxisSpacing: 10,
                     crossAxisSpacing: 10,
-                    childAspectRatio: 0.9,
+                    childAspectRatio: 0.92,
                   ),
                   itemBuilder: (context, idx) {
                     final ach = AchievementDef.all[idx];
@@ -251,12 +330,12 @@ class ProgressScreen extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: isUnlocked
                               ? AppColors.emerald.withValues(alpha: 0.12)
-                              : AppColors.bgCard,
+                              : AppColors.cardBg(context),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: isUnlocked
                                 ? AppColors.emerald.withValues(alpha: 0.5)
-                                : AppColors.border,
+                                : AppColors.cardBorder(context),
                           ),
                         ),
                         child: Column(
@@ -264,11 +343,9 @@ class ProgressScreen extends StatelessWidget {
                           children: [
                             Text(
                               isUnlocked ? ach.emoji : '🔒',
-                              style: TextStyle(
-                                fontSize: isUnlocked ? 28 : 22,
-                              ),
+                              style: TextStyle(fontSize: isUnlocked ? 28 : 22),
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 6),
                             Text(
                               ach.title,
                               textAlign: TextAlign.center,
@@ -276,11 +353,10 @@ class ProgressScreen extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: isUnlocked
-                                    ? AppColors.textPrimary
-                                    : AppColors.textMuted,
+                                    ? AppColors.primaryText(context)
+                                    : AppColors.mutedText(context),
                                 fontSize: 11.5,
                                 fontWeight: FontWeight.w700,
-                                height: 1.2,
                               ),
                             ),
                           ],
@@ -288,6 +364,54 @@ class ProgressScreen extends StatelessWidget {
                       ),
                     );
                   },
+                ),
+
+                const SizedBox(height: 20),
+
+                // Rate App button (App Store compliant direct listing)
+                InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () => ReviewService().openAppStoreReview(),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.cardBg(context),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.cardBorder(context)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.star_rounded, color: AppColors.amber),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Оценить приложение',
+                                style: TextStyle(
+                                  color: AppColors.primaryText(context),
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                ),
+                              ),
+                              Text(
+                                'Оставить отзыв в App Store',
+                                style: TextStyle(
+                                  color: AppColors.secondaryText(context),
+                                  fontSize: 12.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.mutedText(context),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -298,112 +422,49 @@ class ProgressScreen extends StatelessWidget {
   }
 }
 
-class _HeroMiniStat extends StatelessWidget {
-  final String iconAsset;
-  final String label;
-  final String value;
-
-  const _HeroMiniStat({
-    required this.iconAsset,
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.bgPrimary.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-      ),
-      child: Row(
-        children: [
-          Image.asset(iconAsset, width: 28, height: 28),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  value,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 11,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MetricCard extends StatelessWidget {
+class _KpiBox extends StatelessWidget {
   final IconData icon;
-  final Color iconColor;
+  final Color color;
   final String value;
   final String label;
-  final String sublabel;
 
-  const _MetricCard({
+  const _KpiBox({
     required this.icon,
-    required this.iconColor,
+    required this.color,
     required this.value,
     required this.label,
-    required this.sublabel,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
       decoration: BoxDecoration(
-        color: AppColors.bgCard,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: AppColors.cardBorder(context)),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: iconColor, size: 22),
-          const SizedBox(height: 8),
+          Icon(icon, color: color, size: 22),
+          const SizedBox(height: 6),
           Text(
             value,
-            style: const TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 22,
+            style: TextStyle(
+              color: AppColors.primaryText(context),
+              fontSize: 19,
               fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 2),
           Text(
             label,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            sublabel,
-            style: const TextStyle(
-              color: AppColors.textMuted,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: AppColors.secondaryText(context),
               fontSize: 11.5,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],

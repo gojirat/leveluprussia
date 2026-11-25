@@ -14,7 +14,6 @@ class TtsService {
     if (_initialized) return;
     try {
       await _tts.setLanguage('en-US');
-      await _tts.setSpeechRate(0.46);
       await _tts.setVolume(1.0);
       await _tts.setPitch(1.0);
       _initialized = true;
@@ -23,9 +22,11 @@ class TtsService {
     }
   }
 
-  Future<void> speak(String text) async {
+  /// Speaks [text] in English. Set [slow] to true for 0.7x Listening practice speed.
+  Future<void> speak(String text, {bool slow = false}) async {
     try {
       await _ensureInit();
+      await _tts.setSpeechRate(slow ? 0.32 : 0.48);
       await _tts.stop();
       await _tts.speak(text);
     } catch (e) {

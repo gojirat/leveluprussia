@@ -77,10 +77,11 @@ class _LearnScreenState extends State<LearnScreen>
     });
   }
 
-  Future<void> _answer(bool known) async {
+  Future<void> _rateSrs(SrsRating rating) async {
     final word = _words[_index];
+    final known = rating != SrsRating.again;
     _results.add(SessionWordResult(word: word, isCorrect: known));
-    await widget.appState.recordWordAnswer(word.id, known);
+    await widget.appState.recordSrsRating(word.id, rating);
 
     if (known) {
       _currentCorrectStreak++;
@@ -148,7 +149,7 @@ class _LearnScreenState extends State<LearnScreen>
       final duration = DateTime.now().difference(_startedAt).inSeconds;
       return Scaffold(
         appBar: AppBar(
-          title: const Text('Флешкарты'),
+          title: const Text('Интервальные карточки'),
           automaticallyImplyLeading: false,
           actions: [
             IconButton(
@@ -158,7 +159,7 @@ class _LearnScreenState extends State<LearnScreen>
           ],
         ),
         body: SessionSummaryView(
-          title: 'Сессия завершена!',
+          title: 'Тренировка завершена!',
           results: _results,
           durationSeconds: duration,
           newlyUnlocked: _newlyUnlocked,
@@ -188,109 +189,103 @@ class _LearnScreenState extends State<LearnScreen>
         ],
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-          child: Column(
-            children: [
-              // Progress bar
-              ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: LinearProgressIndicator(
-                  value: progress,
-                  minHeight: 7,
-                  backgroundColor: AppColors.bgCard,
-                  valueColor: const AlwaysStoppedAnimation(AppColors.primary),
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // 3D Flippable Card
-              Expanded(
-                child: GestureDetector(
-                  onTap: _toggleFlip,
-                  child: AnimatedBuilder(
-                    animation: _flipController,
-                    builder: (context, _) {
-                      final angle = _flipController.value * pi;
-                      final showBack = angle > pi / 2;
-                      return Transform(
-                        alignment: Alignment.center,
-                        transform: Matrix4.identity()
-                          ..setEntry(3, 2, 0.0012)
-                          ..rotateY(angle),
-                        child: showBack
-                            ? Transform(
-                                alignment: Alignment.center,
-                                transform: Matrix4.identity()..rotateY(pi),
-                                child: _buildCardFace(
-                                  word: word,
-                                  isBack: true,
-                                ),
-                              )
-                            : _buildCardFace(
-                                word: word,
-                                isBack: false,
-                              ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // Answer buttons
-              Row(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+              child: Column(
                 children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 7,
+                      backgroundColor: AppColors.cardBorder(context),
+                      valueColor:
+                          const AlwaysStoppedAnimation(AppColors.primary),
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+
+                  // 3D Flippable Card
                   Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _answer(false),
-                      icon: const Icon(Icons.close_rounded, size: 22),
-                      label: const Text(
-                        'Не знаю',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.coral,
-                        backgroundColor: AppColors.coralSoft,
-                        side: BorderSide(
-                          color: AppColors.coral.withValues(alpha: 0.5),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
+                    child: GestureDetector(
+                      onTap: _toggleFlip,
+                      child: AnimatedBuilder(
+                        animation: _flipController,
+                        builder: (context, _) {
+                          final angle = _flipController.value * pi;
+                          final showBack = angle > pi / 2;
+                          return Transform(
+                            alignment: Alignment.center,
+                            transform: Matrix4.identity()
+                              ..setEntry(3, 2, 0.0012)
+                              ..rotateY(angle),
+                            child: showBack
+                                ? Transform(
+                                    alignment: Alignment.center,
+                                    transform: Matrix4.identity()..rotateY(pi),
+                                    child: _buildCardFace(
+                                      word: word,
+                                      isBack: true,
+                                    ),
+                                  )
+                                : _buildCardFace(
+                                    word: word,
+                                    isBack: false,
+                                  ),
+                          );
+                        },
                       ),
                     ),
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () => _answer(true),
-                      icon: const Icon(Icons.check_rounded, size: 22),
-                      label: const Text(
-                        'Знаю',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
+
+                  const SizedBox(height: 20),
+
+                  // SM-2 Spaced Repetition 4-level rating buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _SrsButton(
+                          label: 'Снова',
+                          interval: '10м',
+                          color: AppColors.coral,
+                          onTap: () => _rateSrs(SrsRating.again),
                         ),
                       ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.emerald,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _SrsButton(
+                          label: 'Трудно',
+                          interval: '1д',
+                          color: AppColors.amber,
+                          onTap: () => _rateSrs(SrsRating.hard),
                         ),
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _SrsButton(
+                          label: 'Хорошо',
+                          interval: '3д',
+                          color: AppColors.primary,
+                          onTap: () => _rateSrs(SrsRating.good),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _SrsButton(
+                          label: 'Легко',
+                          interval: '4д+',
+                          color: AppColors.emerald,
+                          onTap: () => _rateSrs(SrsRating.easy),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -308,23 +303,17 @@ class _LearnScreenState extends State<LearnScreen>
           width: double.infinity,
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: isBack
-                  ? const [Color(0xFF0E2438), Color(0xFF0B1525)]
-                  : const [Color(0xFF132238), Color(0xFF0D1728)],
-            ),
-            borderRadius: BorderRadius.circular(26),
+            color: AppColors.cardBg(context),
+            borderRadius: BorderRadius.circular(28),
             border: Border.all(
               color: isBack
-                  ? AppColors.emerald.withValues(alpha: 0.45)
-                  : AppColors.primary.withValues(alpha: 0.35),
-              width: 1.5,
+                  ? AppColors.emerald.withValues(alpha: 0.6)
+                  : AppColors.primary.withValues(alpha: 0.4),
+              width: 1.8,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.35),
+                color: AppColors.primary.withValues(alpha: 0.08),
                 blurRadius: 24,
                 offset: const Offset(0, 12),
               ),
@@ -340,10 +329,10 @@ class _LearnScreenState extends State<LearnScreen>
                     IconButton(
                       onPressed: () => TtsService().speak(word.word),
                       icon: const Icon(Icons.volume_up_rounded),
-                      color: AppColors.primaryLight,
+                      color: AppColors.primary,
                       style: IconButton.styleFrom(
                         backgroundColor:
-                            AppColors.primary.withValues(alpha: 0.14),
+                            AppColors.primary.withValues(alpha: 0.12),
                       ),
                     ),
                   const SizedBox(width: 6),
@@ -354,7 +343,9 @@ class _LearnScreenState extends State<LearnScreen>
                           ? Icons.favorite_rounded
                           : Icons.favorite_border_rounded,
                     ),
-                    color: isFav ? AppColors.coral : AppColors.textSecondary,
+                    color: isFav
+                        ? AppColors.coral
+                        : AppColors.secondaryText(context),
                   ),
                 ],
               ),
@@ -365,7 +356,7 @@ class _LearnScreenState extends State<LearnScreen>
                 style: TextStyle(
                   fontSize: showEnglish ? 36 : 30,
                   fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary,
+                  color: AppColors.primaryText(context),
                   letterSpacing: -0.5,
                 ),
               ),
@@ -375,8 +366,8 @@ class _LearnScreenState extends State<LearnScreen>
                   word.phonetic,
                   style: const TextStyle(
                     fontSize: 18,
-                    color: AppColors.primaryLight,
-                    fontWeight: FontWeight.w500,
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -386,16 +377,16 @@ class _LearnScreenState extends State<LearnScreen>
                   padding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.06),
+                    color: AppColors.primary.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
                     showEnglish ? word.translation : word.word,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w500,
+                      color: AppColors.secondaryText(context),
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -404,21 +395,19 @@ class _LearnScreenState extends State<LearnScreen>
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.touch_app_rounded,
                     size: 16,
-                    color: AppColors.textMuted,
+                    color: AppColors.mutedText(context),
                   ),
                   const SizedBox(width: 6),
                   Text(
                     isBack
-                        ? 'Нажмите, чтобы перевернуть'
-                        : (widget.reverseMode
-                            ? 'Нажмите, чтобы увидеть английское слово'
-                            : 'Нажмите, чтобы увидеть перевод'),
-                    style: const TextStyle(
+                        ? 'Оцените, насколько легко вспомнили слово'
+                        : 'Нажмите на карточку, чтобы перевернуть',
+                    style: TextStyle(
                       fontSize: 13,
-                      color: AppColors.textMuted,
+                      color: AppColors.mutedText(context),
                     ),
                   ),
                 ],
@@ -427,6 +416,58 @@ class _LearnScreenState extends State<LearnScreen>
           ),
         );
       },
+    );
+  }
+}
+
+class _SrsButton extends StatelessWidget {
+  final String label;
+  final String interval;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _SrsButton({
+    required this.label,
+    required this.interval,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withValues(alpha: 0.45)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w800,
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              interval,
+              style: TextStyle(
+                color: color.withValues(alpha: 0.85),
+                fontWeight: FontWeight.w600,
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

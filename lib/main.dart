@@ -36,18 +36,27 @@ class _LevelUpAppState extends State<LevelUpApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Изучение слов: уровень',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme,
-      home: !_appState.isLoaded
-          ? const _SplashLoadingView()
-          : _showWelcome
-              ? WelcomeScreen(
-                  appState: _appState,
-                  onFinished: () => setState(() => _showWelcome = false),
-                )
-              : MainTabsScreen(appState: _appState),
+    return ListenableBuilder(
+      listenable: _appState,
+      builder: (context, _) {
+        return MaterialApp(
+          title: 'Изучение слов: уровень',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: _appState.settings.isDarkMode
+              ? ThemeMode.dark
+              : ThemeMode.light,
+          home: !_appState.isLoaded
+              ? const _SplashLoadingView()
+              : _showWelcome
+                  ? WelcomeScreen(
+                      appState: _appState,
+                      onFinished: () => setState(() => _showWelcome = false),
+                    )
+                  : MainTabsScreen(appState: _appState),
+        );
+      },
     );
   }
 }
@@ -58,7 +67,6 @@ class _SplashLoadingView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.bgPrimary,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,

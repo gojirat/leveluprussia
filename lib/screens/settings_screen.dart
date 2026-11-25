@@ -8,12 +8,12 @@ class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key, required this.appState});
 
   static const _countOptions = [5, 10, 15, 20, 30];
+  static const _dailyGoalOptions = [10, 20, 30, 50];
 
   Future<void> _confirmResetWelcome(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.bgCard,
         title: const Text('Сбросить экран приветствия'),
         content: const Text(
           'Показать экран приветствия снова при следующем запуске?',
@@ -49,7 +49,6 @@ class SettingsScreen extends StatelessWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.bgCard,
         title: const Text('Очистить прогресс?'),
         content: const Text(
           'Удалит статистику, достижения, избранное и серии. Обучение начнётся заново.',
@@ -86,76 +85,99 @@ class SettingsScreen extends StatelessWidget {
         listenable: appState,
         builder: (context, _) {
           final settings = appState.settings;
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-            children: [
-              const Text(
-                'Настройки обучения',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Настройте параметры обучения под свои цели и уровень',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-              ),
-              const SizedBox(height: 16),
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 640),
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+                children: [
+                  // Theme toggle
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.cardBg(context),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.cardBorder(context)),
+                    ),
+                    child: SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        'Тёмная тема',
+                        style: TextStyle(
+                          color: AppColors.primaryText(context),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      subtitle: Text(
+                        'Переключение между светлым и тёмным оформлением',
+                        style: TextStyle(
+                          color: AppColors.secondaryText(context),
+                          fontSize: 12.5,
+                        ),
+                      ),
+                      value: settings.isDarkMode,
+                      onChanged: (v) => appState.updateSettings(
+                        settings.copyWith(isDarkMode: v),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
 
-              // Flashcards count
-              _CountSelectorCard(
-                title: 'Слов в карточках',
-                subtitle: 'Количество слов в одной сессии флешкарт',
-                options: _countOptions,
-                selected: settings.flashcardWordCount,
-                onChanged: (v) => appState.updateSettings(
-                  settings.copyWith(flashcardWordCount: v),
-                ),
-              ),
-              const SizedBox(height: 12),
+                  _CountSelectorCard(
+                    title: 'Дневная цель (слов в день)',
+                    subtitle: 'Отображается в кольце прогресса и графике недели',
+                    options: _dailyGoalOptions,
+                    selected: settings.dailyGoalWords,
+                    onChanged: (v) => appState.updateSettings(
+                      settings.copyWith(dailyGoalWords: v),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
 
-              // Quiz count
-              _CountSelectorCard(
-                title: 'Слов в квизе',
-                subtitle: 'Количество слов в одной сессии квиза',
-                options: _countOptions,
-                selected: settings.quizWordCount,
-                onChanged: (v) => appState.updateSettings(
-                  settings.copyWith(quizWordCount: v),
-                ),
-              ),
-              const SizedBox(height: 24),
+                  _CountSelectorCard(
+                    title: 'Слов в карточках',
+                    subtitle: 'Количество слов в одной сессии SM-2',
+                    options: _countOptions,
+                    selected: settings.flashcardWordCount,
+                    onChanged: (v) => appState.updateSettings(
+                      settings.copyWith(flashcardWordCount: v),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
 
-              const Text(
-                'Управление данными',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 12),
+                  _CountSelectorCard(
+                    title: 'Слов в квизе и аудировании',
+                    subtitle: 'Количество вопросов в одной тренировке',
+                    options: _countOptions,
+                    selected: settings.quizWordCount,
+                    onChanged: (v) => appState.updateSettings(
+                      settings.copyWith(quizWordCount: v),
+                    ),
+                  ),
+                  const SizedBox(height: 22),
 
-              _ActionRow(
-                icon: Icons.waving_hand_rounded,
-                iconColor: AppColors.primaryLight,
-                title: 'Сбросить экран приветствия',
-                subtitle: 'Показать онбординг при следующем запуске',
-                onTap: () => _confirmResetWelcome(context),
+                  _ActionRow(
+                    icon: Icons.waving_hand_rounded,
+                    iconColor: AppColors.primary,
+                    title: 'Сбросить экран приветствия',
+                    subtitle: 'Показать онбординг при следующем запуске',
+                    onTap: () => _confirmResetWelcome(context),
+                  ),
+                  const SizedBox(height: 10),
+                  _ActionRow(
+                    icon: Icons.delete_forever_rounded,
+                    iconColor: AppColors.coral,
+                    title: 'Очистить всю историю прогресса',
+                    subtitle: 'Удалит статистику, достижения и серии.',
+                    destructive: true,
+                    onTap: () => _confirmClearProgress(context),
+                  ),
+                ],
               ),
-              const SizedBox(height: 10),
-              _ActionRow(
-                icon: Icons.delete_forever_rounded,
-                iconColor: AppColors.coral,
-                title: 'Очистить всю историю прогресса',
-                subtitle:
-                    'Все данные обучения будут удалены без возможности восстановления.',
-                destructive: true,
-                onTap: () => _confirmClearProgress(context),
-              ),
-            ],
+            ),
           );
         },
       ),
@@ -183,17 +205,17 @@ class _CountSelectorCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.bgCard,
+        color: AppColors.cardBg(context),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: AppColors.cardBorder(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             title,
-            style: const TextStyle(
-              color: AppColors.textPrimary,
+            style: TextStyle(
+              color: AppColors.primaryText(context),
               fontWeight: FontWeight.w700,
               fontSize: 15.5,
             ),
@@ -201,8 +223,8 @@ class _CountSelectorCard extends StatelessWidget {
           const SizedBox(height: 3),
           Text(
             subtitle,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
+            style: TextStyle(
+              color: AppColors.secondaryText(context),
               fontSize: 12.5,
             ),
           ),
@@ -220,13 +242,13 @@ class _CountSelectorCard extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
                         color: isSelected
-                            ? AppColors.primary.withValues(alpha: 0.22)
-                            : AppColors.bgSecondary,
+                            ? AppColors.primary.withValues(alpha: 0.16)
+                            : AppColors.surfaceBg(context),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                           color: isSelected
                               ? AppColors.primary
-                              : AppColors.border,
+                              : AppColors.cardBorder(context),
                         ),
                       ),
                       alignment: Alignment.center,
@@ -234,8 +256,8 @@ class _CountSelectorCard extends StatelessWidget {
                         '$v',
                         style: TextStyle(
                           color: isSelected
-                              ? AppColors.primaryLight
-                              : AppColors.textPrimary,
+                              ? AppColors.primary
+                              : AppColors.primaryText(context),
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -276,12 +298,12 @@ class _ActionRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: destructive ? AppColors.coralSoft : AppColors.bgCard,
+          color: destructive ? AppColors.coralSoft : AppColors.cardBg(context),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: destructive
                 ? AppColors.coral.withValues(alpha: 0.4)
-                : AppColors.border,
+                : AppColors.cardBorder(context),
           ),
         ),
         child: Row(
@@ -297,7 +319,7 @@ class _ActionRow extends StatelessWidget {
                     style: TextStyle(
                       color: destructive
                           ? AppColors.coral
-                          : AppColors.textPrimary,
+                          : AppColors.primaryText(context),
                       fontWeight: FontWeight.w700,
                       fontSize: 15,
                     ),
@@ -305,17 +327,17 @@ class _ActionRow extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
+                    style: TextStyle(
+                      color: AppColors.secondaryText(context),
                       fontSize: 12.5,
                     ),
                   ),
                 ],
               ),
             ),
-            const Icon(
+            Icon(
               Icons.chevron_right_rounded,
-              color: AppColors.textMuted,
+              color: AppColors.mutedText(context),
             ),
           ],
         ),

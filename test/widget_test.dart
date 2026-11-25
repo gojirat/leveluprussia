@@ -7,7 +7,7 @@ import 'package:levelup_english/screens/welcome_screen.dart';
 import 'package:levelup_english/screens/main_tabs_screen.dart';
 
 void main() {
-  testWidgets('AppState loads all 4,109 CEFR words and WelcomeScreen renders',
+  testWidgets('AppState loads all 4,109 CEFR words and WelcomeScreen completes',
       (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
     final appState = AppState();
@@ -24,7 +24,7 @@ void main() {
     bool finished = false;
     await tester.pumpWidget(
       MaterialApp(
-        theme: AppTheme.darkTheme,
+        theme: AppTheme.lightTheme,
         home: WelcomeScreen(
           appState: appState,
           onFinished: () => finished = true,
@@ -36,41 +36,45 @@ void main() {
     expect(find.text('Изучение слов: уровень'), findsOneWidget);
     expect(find.text('Пропустить'), findsOneWidget);
 
-    // Tap "Продолжить →" through all 3 slides and complete onboarding
     await tester.tap(find.text('Продолжить →'));
     await tester.pumpAndSettle();
-    expect(find.text('Обучение по карточкам'), findsOneWidget);
+    expect(find.text('Аудирование и мини-игры'), findsOneWidget);
 
     await tester.tap(find.text('Продолжить →'));
     await tester.pumpAndSettle();
-    expect(find.text('Квизы и отслеживание прогресса'), findsOneWidget);
+    expect(find.text('Свой словарь и дневная цель'), findsOneWidget);
 
     await tester.tap(find.text('Начать обучение'));
     await tester.pumpAndSettle();
     expect(finished, isTrue);
   });
 
-  testWidgets('MainTabsScreen renders all 5 tabs and CEFR levels',
+  testWidgets('MainTabsScreen renders 4 tabs and supports custom personal words',
       (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({
       '@english_words_welcome_shown': true,
     });
     final appState = AppState();
     await tester.runAsync(() => appState.init());
+    await appState.addCustomWord(
+      word: 'resilience',
+      translation: 'стойкость',
+      note: 'personal note',
+    );
+    expect(appState.customWords.length, 1);
 
     await tester.pumpWidget(
       MaterialApp(
-        theme: AppTheme.darkTheme,
+        theme: AppTheme.lightTheme,
         home: MainTabsScreen(appState: appState),
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Главная'), findsOneWidget);
+    expect(find.text('Обучение'), findsOneWidget);
+    expect(find.text('Тренажёры'), findsOneWidget);
     expect(find.text('Словарь'), findsOneWidget);
-    expect(find.text('Избранное'), findsOneWidget);
     expect(find.text('Прогресс'), findsOneWidget);
-    expect(find.text('Профиль'), findsOneWidget);
     expect(find.text('Уровень A1'), findsOneWidget);
   });
 }

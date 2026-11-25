@@ -15,6 +15,8 @@ class AppState extends ChangeNotifier {
   static const _kAchievements = '@english_words_achievements';
   static const _kSettings = '@english_words_settings';
   static const _kWelcomeShown = '@english_words_welcome_shown';
+  static const _kCustomWords = '@english_words_custom_words';
+  static const _kBestMatchSeconds = '@english_words_best_match_sec';
 
   bool _isLoaded = false;
   bool get isLoaded => _isLoaded;
@@ -27,6 +29,12 @@ class AppState extends ChangeNotifier {
 
   final Map<String, List<WordItem>> _wordsByLevel = {};
   final Map<String, WordItem> _wordsById = {};
+
+  List<CustomWord> _customWords = [];
+  List<CustomWord> get customWords => _customWords;
+
+  int? _bestMatchSeconds;
+  int? get bestMatchSeconds => _bestMatchSeconds;
 
   Map<String, WordProgress> _progress = {};
   Map<String, WordProgress> get progress => _progress;
@@ -50,7 +58,6 @@ class AppState extends ChangeNotifier {
   AppSettings get settings => _settings;
 
   Future<void> init() async {
-    // Load bundled 4,109 CEFR words
     final rawJson = await rootBundle.loadString('assets/data/words.json');
     final List<dynamic> parsed = jsonDecode(rawJson) as List<dynamic>;
     _words = parsed
@@ -66,8 +73,8 @@ class AppState extends ChangeNotifier {
 
     final prefs = await SharedPreferences.getInstance();
     _welcomeShown = prefs.getBool(_kWelcomeShown) ?? false;
+    _bestMatchSeconds = prefs.getInt(_kBestMatchSeconds);
 
-    // Progress
     final progressRaw = prefs.getString(_kProgress);
     if (progressRaw != null) {
       try {
@@ -78,13 +85,21 @@ class AppState extends ChangeNotifier {
       } catch (_) {}
     }
 
-    // Favorites
+    final customRaw = prefs.getString(_kCustomWords);
+    if (customRaw != null) {
+      try {
+        final decoded = jsonDecode(customRaw) as List<dynamic>;
+        _customWords = decoded
+            .map((e) => CustomWord.fromJson(e as Map<String, dynamic>))
+            .toList();
+      } catch (_) {}
+    }
+
     final favRaw = prefs.getStringList(_kFavorites);
     if (favRaw != null) {
       _favorites = favRaw.toSet();
     }
 
-    // Streak
     final streakRaw = prefs.getString(_kStreak);
     if (streakRaw != null) {
       try {
@@ -94,7 +109,6 @@ class AppState extends ChangeNotifier {
       } catch (_) {}
     }
 
-    // Daily stats
     final dailyRaw = prefs.getString(_kDailyStats);
     if (dailyRaw != null) {
       try {
@@ -105,7 +119,6 @@ class AppState extends ChangeNotifier {
       } catch (_) {}
     }
 
-    // Sessions
     final sessionsRaw = prefs.getString(_kSessions);
     if (sessionsRaw != null) {
       try {
@@ -116,7 +129,6 @@ class AppState extends ChangeNotifier {
       } catch (_) {}
     }
 
-    // Achievements
     final achRaw = prefs.getString(_kAchievements);
     if (achRaw != null) {
       try {
@@ -127,7 +139,6 @@ class AppState extends ChangeNotifier {
       } catch (_) {}
     }
 
-    // Settings
     final settingsRaw = prefs.getString(_kSettings);
     if (settingsRaw != null) {
       try {
@@ -144,6 +155,19 @@ class AppState extends ChangeNotifier {
   // --- Helpers ---
   List<WordItem> wordsForLevel(String level) {
     if (level == 'ALL') return _words;
+    if (level == 'MY') {
+      return _customWords
+          .map(
+            (c) => WordItem(
+              id: c.id,
+              word: c.word,
+              translation: c.translation,
+              phonetic: c.note,
+              level: 'MY',
+            ),
+          )
+          .toList();
+    }
     return _wordsByLevel[level] ?? const [];
   }
 
@@ -162,6 +186,19 @@ class AppState extends ChangeNotifier {
   int get totalMasteredCount =>
       _progress.values.where((p) => p.isMastered).length;
 
+  /// Words scheduled for SM-2 spaced repetition review today
+  List<WordItem> get dueForReviewWords {
+    final now = DateTime.now();
+    final due = <WordItem>[];
+    for (final entry in _progress.entries) {
+      if (!entry.value.nextReviewAt.isAfter(now)) {
+        final w = _wordsById[entry.key];
+        if (w != null) due.add(w);
+      }
+    }
+    return due;
+  }
+
   int learnedCountForLevel(String level) {
     final list = wordsForLevel(level);
     int c = 0;
@@ -171,24 +208,26 @@ class AppState extends ChangeNotifier {
     return c;
   }
 
-  int masteredCountForLevel(String level) {
-    final list = wordsForLevel(level);
-    int c = 0;
-    for (final w in list) {
-      if (_progress[w.id]?.isMastered == true) c++;
-    }
-    return c;
+  String _dateKey(DateTime dt) {
+    return '${dt.year.toString().padLeft(4, '0')}-'
+        '${dt.month.toString().padLeft(2, '0')}-'
+        '${dt.day.toString().padLeft(2, '0')}';
   }
 
-  String _todayKey() {
-    final now = DateTime.now();
-    return '${now.year.toString().padLeft(4, '0')}-'
-        '${now.month.toString().padLeft(2, '0')}-'
-        '${now.day.toString().padLeft(2, '0')}';
-  }
+  String _todayKey() => _dateKey(DateTime.now());
 
   DailyStats get todayStats =>
       _dailyStats[_todayKey()] ?? DailyStats(date: _todayKey());
+
+  /// Last 7 days activity for the weekly bar chart
+  List<DailyStats> get last7DaysStats {
+    final now = DateTime.now();
+    return List.generate(7, (idx) {
+      final dt = now.subtract(Duration(days: 6 - idx));
+      final key = _dateKey(dt);
+      return _dailyStats[key] ?? DailyStats(date: key);
+    });
+  }
 
   int get totalStudySeconds =>
       _dailyStats.values.fold(0, (sum, d) => sum + d.durationSeconds);
@@ -214,15 +253,17 @@ class AppState extends ChangeNotifier {
         .toList();
     if (pool.isEmpty) return const [];
 
-    // Prioritize unlearned and non-mastered words, shuffled within groups
     final rng = Random();
+    final dueNow = <WordItem>[];
     final unlearned = <WordItem>[];
     final learning = <WordItem>[];
     final mastered = <WordItem>[];
 
     for (final w in pool) {
       final p = _progress[w.id];
-      if (p == null || !p.isLearned) {
+      if (p != null && p.isDueNow) {
+        dueNow.add(w);
+      } else if (p == null || !p.isLearned) {
         unlearned.add(w);
       } else if (!p.isMastered) {
         learning.add(w);
@@ -231,12 +272,54 @@ class AppState extends ChangeNotifier {
       }
     }
 
+    dueNow.shuffle(rng);
     unlearned.shuffle(rng);
     learning.shuffle(rng);
     mastered.shuffle(rng);
 
-    final combined = [...unlearned, ...learning, ...mastered];
+    final combined = [...dueNow, ...unlearned, ...learning, ...mastered];
     return combined.take(min(count, combined.length)).toList();
+  }
+
+  // --- Custom Personal Words CRUD ---
+  Future<void> addCustomWord({
+    required String word,
+    required String translation,
+    String note = '',
+  }) async {
+    final item = CustomWord(
+      id: 'my_${DateTime.now().millisecondsSinceEpoch}',
+      word: word.trim(),
+      translation: translation.trim(),
+      note: note.trim(),
+      createdAt: DateTime.now(),
+    );
+    _customWords.insert(0, item);
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _kCustomWords,
+      jsonEncode(_customWords.map((e) => e.toJson()).toList()),
+    );
+  }
+
+  Future<void> deleteCustomWord(String id) async {
+    _customWords.removeWhere((e) => e.id == id);
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _kCustomWords,
+      jsonEncode(_customWords.map((e) => e.toJson()).toList()),
+    );
+  }
+
+  Future<void> recordMatchGameTime(int seconds) async {
+    if (_bestMatchSeconds == null || seconds < _bestMatchSeconds!) {
+      _bestMatchSeconds = seconds;
+      notifyListeners();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_kBestMatchSeconds, seconds);
+    }
   }
 
   // --- Mutations ---
@@ -265,23 +348,55 @@ class AppState extends ChangeNotifier {
     await prefs.setString(_kSettings, jsonEncode(_settings.toJson()));
   }
 
-  Future<void> recordWordAnswer(String wordId, bool isCorrect) async {
+  /// SM-2 Spaced Repetition answer recording
+  Future<void> recordSrsRating(String wordId, SrsRating rating) async {
     final prev = _progress[wordId];
     final now = DateTime.now();
-    if (prev == null) {
-      _progress[wordId] = WordProgress(
-        wordId: wordId,
-        correctCount: isCorrect ? 1 : 0,
-        incorrectCount: isCorrect ? 0 : 1,
-        lastReviewed: now,
-      );
-    } else {
-      _progress[wordId] = prev.copyWith(
-        correctCount: prev.correctCount + (isCorrect ? 1 : 0),
-        incorrectCount: prev.incorrectCount + (isCorrect ? 0 : 1),
-        lastReviewed: now,
-      );
+    final prevInterval = prev?.intervalDays ?? 1;
+    final prevEase = prev?.easeFactor ?? 2.5;
+
+    late int nextInterval;
+    late double nextEase;
+    late DateTime nextReview;
+    bool isCorrect = rating != SrsRating.again;
+
+    switch (rating) {
+      case SrsRating.again:
+        nextInterval = 0;
+        nextEase = max(1.3, prevEase - 0.2);
+        nextReview = now.add(const Duration(minutes: 10));
+        break;
+      case SrsRating.hard:
+        nextInterval = max(1, (prevInterval * 1.2).round());
+        nextEase = max(1.3, prevEase - 0.15);
+        nextReview = now.add(Duration(days: nextInterval));
+        break;
+      case SrsRating.good:
+        nextInterval = prev == null
+            ? 1
+            : (prevInterval <= 1 ? 3 : (prevInterval * prevEase).round());
+        nextEase = prevEase;
+        nextReview = now.add(Duration(days: nextInterval));
+        break;
+      case SrsRating.easy:
+        nextInterval = prev == null
+            ? 4
+            : max(4, (prevInterval * prevEase * 1.3).round());
+        nextEase = min(3.0, prevEase + 0.15);
+        nextReview = now.add(Duration(days: nextInterval));
+        break;
     }
+
+    _progress[wordId] = WordProgress(
+      wordId: wordId,
+      correctCount: (prev?.correctCount ?? 0) + (isCorrect ? 1 : 0),
+      incorrectCount: (prev?.incorrectCount ?? 0) + (isCorrect ? 0 : 1),
+      lastReviewed: now,
+      intervalDays: nextInterval,
+      easeFactor: nextEase,
+      nextReviewAt: nextReview,
+    );
+
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
@@ -290,7 +405,13 @@ class AppState extends ChangeNotifier {
     );
   }
 
-  /// Saves completed session, updates streak & daily stats, and returns newly unlocked achievements.
+  Future<void> recordWordAnswer(String wordId, bool isCorrect) {
+    return recordSrsRating(
+      wordId,
+      isCorrect ? SrsRating.good : SrsRating.again,
+    );
+  }
+
   Future<List<AchievementDef>> completeSession({
     required String mode,
     required String level,
@@ -315,7 +436,6 @@ class AppState extends ChangeNotifier {
       _sessions = _sessions.sublist(0, 200);
     }
 
-    // Update daily stats
     final today = _todayKey();
     final prevDaily = _dailyStats[today] ?? DailyStats(date: today);
     _dailyStats[today] = DailyStats(
@@ -326,10 +446,7 @@ class AppState extends ChangeNotifier {
       durationSeconds: prevDaily.durationSeconds + max(1, durationSeconds),
     );
 
-    // Update streak
     _updateStreakForToday(today);
-
-    // Check achievements
     final newlyUnlocked = _checkAchievements(session);
 
     notifyListeners();
@@ -431,6 +548,7 @@ class AppState extends ChangeNotifier {
     _dailyStats = {};
     _sessions = [];
     _unlockedAchievements = {};
+    _bestMatchSeconds = null;
     notifyListeners();
 
     final prefs = await SharedPreferences.getInstance();
@@ -441,6 +559,7 @@ class AppState extends ChangeNotifier {
       prefs.remove(_kDailyStats),
       prefs.remove(_kSessions),
       prefs.remove(_kAchievements),
+      prefs.remove(_kBestMatchSeconds),
     ]);
   }
 }

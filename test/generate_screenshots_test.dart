@@ -4,18 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:levelup_english/models/learning_models.dart';
 import 'package:levelup_english/screens/home_screen.dart';
 import 'package:levelup_english/screens/learn_screen.dart';
-import 'package:levelup_english/screens/quiz_screen.dart';
-import 'package:levelup_english/screens/words_screen.dart';
+import 'package:levelup_english/screens/listening_screen.dart';
+import 'package:levelup_english/screens/match_game_screen.dart';
+import 'package:levelup_english/screens/practice_hub_screen.dart';
 import 'package:levelup_english/screens/progress_screen.dart';
 import 'package:levelup_english/state/app_state.dart';
 import 'package:levelup_english/theme/app_theme.dart';
 
 Future<void> _loadRealFonts() async {
-  // Load Apple San Francisco (Cyrillic + Latin + IPA) under both SFPro and
-  // Flutter's default fallback families so AppBar/Button text styles also render crisply.
   final sfBytes = await File('/System/Library/Fonts/SFNS.ttf').readAsBytes();
   for (final family in [
     'SFPro',
@@ -30,7 +28,6 @@ Future<void> _loadRealFonts() async {
     await loader.load();
   }
 
-  // Load Material Icons font
   final iconBytes = await File(
     '/Users/macbookpro/Development/flutter/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
   ).readAsBytes();
@@ -41,10 +38,9 @@ Future<void> _loadRealFonts() async {
 
 Future<AppState> _createSeededState(WidgetTester tester) async {
   final now = DateTime.now();
-  final today =
-      '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  String fmt(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-  // Seed realistic demo progress so screenshots look rich and authentic
   final progressMap = <String, dynamic>{};
   for (int i = 1; i <= 145; i++) {
     progressMap['a1_$i'] = {
@@ -52,6 +48,11 @@ Future<AppState> _createSeededState(WidgetTester tester) async {
       'correctCount': i <= 65 ? 3 : 1,
       'incorrectCount': 0,
       'lastReviewed': now.toIso8601String(),
+      'intervalDays': i <= 65 ? 10 : 1,
+      'easeFactor': 2.5,
+      'nextReviewAt':
+          (i <= 18 ? now.subtract(const Duration(hours: 2)) : now.add(const Duration(days: 5)))
+              .toIso8601String(),
     };
   }
   for (int i = 709; i <= 790; i++) {
@@ -60,35 +61,37 @@ Future<AppState> _createSeededState(WidgetTester tester) async {
       'correctCount': i <= 740 ? 3 : 1,
       'incorrectCount': 0,
       'lastReviewed': now.toIso8601String(),
+      'intervalDays': 6,
+      'easeFactor': 2.5,
+      'nextReviewAt': now.add(const Duration(days: 6)).toIso8601String(),
     };
   }
-  for (int i = 1586; i <= 1630; i++) {
-    progressMap['b1_$i'] = {
-      'wordId': 'b1_$i',
-      'correctCount': 1,
-      'incorrectCount': 0,
-      'lastReviewed': now.toIso8601String(),
+
+  final daily = <String, dynamic>{};
+  const counts = [14, 22, 18, 30, 25, 16, 15];
+  for (int i = 0; i < 7; i++) {
+    final dt = now.subtract(Duration(days: 6 - i));
+    final key = fmt(dt);
+    daily[key] = {
+      'date': key,
+      'wordsReviewed': counts[i],
+      'correctAnswers': counts[i] - 1,
+      'totalAnswers': counts[i],
+      'durationSeconds': counts[i] * 25,
     };
   }
 
   SharedPreferences.setMockInitialValues({
     '@english_words_welcome_shown': true,
     '@english_words_progress': jsonEncode(progressMap),
-    '@english_words_favorites': ['a1_3', 'a1_5', 'a1_12', 'a2_710', 'b1_1587'],
+    '@english_words_favorites': ['a1_3', 'a1_5', 'a1_12', 'a2_710'],
+    '@english_words_best_match_sec': 19,
     '@english_words_streak': jsonEncode({
       'currentStreak': 7,
       'bestStreak': 12,
-      'lastActivityDate': today,
+      'lastActivityDate': fmt(now),
     }),
-    '@english_words_daily_stats': jsonEncode({
-      today: {
-        'date': today,
-        'wordsReviewed': 25,
-        'correctAnswers': 23,
-        'totalAnswers': 25,
-        'durationSeconds': 1420,
-      },
-    }),
+    '@english_words_daily_stats': jsonEncode(daily),
     '@english_words_sessions': jsonEncode([
       {
         'id': '1',
@@ -102,7 +105,7 @@ Future<AppState> _createSeededState(WidgetTester tester) async {
       },
       {
         'id': '2',
-        'mode': 'quiz_choice',
+        'mode': 'listening',
         'level': 'A2',
         'totalWords': 15,
         'correctCount': 14,
@@ -119,7 +122,6 @@ Future<AppState> _createSeededState(WidgetTester tester) async {
       'streak_3': now.toIso8601String(),
       'streak_7': now.toIso8601String(),
       'accuracy_80': now.toIso8601String(),
-      'streak_correct_10': now.toIso8601String(),
     }),
   });
 
@@ -146,19 +148,16 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   const devices = [
-    // iPhone 6.1" -> 393 * 3 = 1179, 852 * 3 = 2556
     _DeviceSpec('iphone_6_1', 393, 852, 3.0),
-    // iPad 12.9" -> 1024 * 2 = 2048, 1366 * 2 = 2732
     _DeviceSpec('ipad_12_9', 1024, 1366, 2.0),
-    // iPhone Duo -> 669 * 3 = 2007, 951 * 3 = 2853
     _DeviceSpec('iphone_duo', 669, 951, 3.0),
   ];
 
-  testWidgets('Generate App Store screenshots for all devices', (tester) async {
+  testWidgets('Generate redesigned App Store screenshots', (tester) async {
     await tester.runAsync(_loadRealFonts);
     final appState = await _createSeededState(tester);
 
-    final baseTheme = AppTheme.darkTheme;
+    final baseTheme = AppTheme.lightTheme;
     final screenshotTheme = baseTheme.copyWith(
       textTheme: baseTheme.textTheme.apply(fontFamily: 'SFPro'),
       primaryTextTheme: baseTheme.primaryTextTheme.apply(fontFamily: 'SFPro'),
@@ -167,69 +166,92 @@ void main() {
           fontFamily: 'SFPro',
         ),
       ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: baseTheme.elevatedButtonTheme.style?.copyWith(
-          textStyle: const WidgetStatePropertyAll(
-            TextStyle(
-              fontFamily: 'SFPro',
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ),
-      outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(
-          textStyle: const TextStyle(
-            fontFamily: 'SFPro',
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
     );
 
-    Widget wrapWithNav(Widget body, int selectedTab) {
+    Widget wrapShell(Widget body, int tab, bool isWide) {
+      if (isWide) {
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: screenshotTheme,
+          home: Scaffold(
+            body: Row(
+              children: [
+                NavigationRail(
+                  selectedIndex: tab,
+                  onDestinationSelected: (_) {},
+                  labelType: NavigationRailLabelType.all,
+                  leading: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.asset(
+                        'assets/images/app_icon_1024.png',
+                        width: 44,
+                        height: 44,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  destinations: const [
+                    NavigationRailDestination(
+                      icon: Icon(Icons.school_outlined),
+                      selectedIcon: Icon(Icons.school_rounded),
+                      label: Text('Обучение'),
+                    ),
+                    NavigationRailDestination(
+                      icon: Icon(Icons.fitness_center_outlined),
+                      selectedIcon: Icon(Icons.fitness_center_rounded),
+                      label: Text('Тренажёры'),
+                    ),
+                    NavigationRailDestination(
+                      icon: Icon(Icons.menu_book_outlined),
+                      selectedIcon: Icon(Icons.menu_book_rounded),
+                      label: Text('Словарь'),
+                    ),
+                    NavigationRailDestination(
+                      icon: Icon(Icons.insights_outlined),
+                      selectedIcon: Icon(Icons.insights_rounded),
+                      label: Text('Прогресс'),
+                    ),
+                  ],
+                ),
+                const VerticalDivider(width: 1),
+                Expanded(child: body),
+              ],
+            ),
+          ),
+        );
+      }
       return MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: screenshotTheme,
         home: Scaffold(
           body: body,
-          bottomNavigationBar: Container(
-            decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: AppColors.border, width: 1)),
-            ),
-            child: NavigationBar(
-              selectedIndex: selectedTab,
-              onDestinationSelected: (_) {},
-              destinations: const [
-                NavigationDestination(
-                  icon: Icon(Icons.home_outlined),
-                  selectedIcon: Icon(Icons.home_rounded),
-                  label: 'Главная',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.menu_book_outlined),
-                  selectedIcon: Icon(Icons.menu_book_rounded),
-                  label: 'Словарь',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.favorite_outline_rounded),
-                  selectedIcon: Icon(Icons.favorite_rounded),
-                  label: 'Избранное',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.bar_chart_outlined),
-                  selectedIcon: Icon(Icons.bar_chart_rounded),
-                  label: 'Прогресс',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.person_outline_rounded),
-                  selectedIcon: Icon(Icons.person_rounded),
-                  label: 'Профиль',
-                ),
-              ],
-            ),
+          bottomNavigationBar: NavigationBar(
+            selectedIndex: tab,
+            onDestinationSelected: (_) {},
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.school_outlined),
+                selectedIcon: Icon(Icons.school_rounded),
+                label: 'Обучение',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.fitness_center_outlined),
+                selectedIcon: Icon(Icons.fitness_center_rounded),
+                label: 'Тренажёры',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.menu_book_outlined),
+                selectedIcon: Icon(Icons.menu_book_rounded),
+                label: 'Словарь',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.insights_outlined),
+                selectedIcon: Icon(Icons.insights_rounded),
+                label: 'Прогресс',
+              ),
+            ],
           ),
         ),
       );
@@ -238,6 +260,7 @@ void main() {
     final sampleWords = appState.wordsForLevel('B1').take(10).toList();
 
     for (final d in devices) {
+      final isWide = d.logicalWidth >= 768;
       tester.view.devicePixelRatio = d.dpr;
       tester.view.physicalSize = Size(
         d.logicalWidth * d.dpr,
@@ -260,10 +283,8 @@ void main() {
         );
       }
 
-      // 1. Home
-      await capture(wrapWithNav(HomeScreen(appState: appState), 0), '01_home');
-
-      // 2. Flashcards
+      await capture(wrapShell(HomeScreen(appState: appState), 0, isWide), '01_home');
+      await capture(wrapShell(PracticeHubScreen(appState: appState), 1, isWide), '02_practice');
       await capture(
         MaterialApp(
           debugShowCheckedModeBanner: false,
@@ -277,36 +298,31 @@ void main() {
             requestedCount: 10,
           ),
         ),
-        '02_flashcard',
+        '03_srs_cards',
       );
-
-      // 3. Quiz
       await capture(
         MaterialApp(
           debugShowCheckedModeBanner: false,
           theme: screenshotTheme,
-          home: QuizScreen(
+          home: ListeningScreen(
             appState: appState,
             levelCode: 'B1',
             initialWords: sampleWords,
-            quizMode: QuizMode.multipleChoice,
-            favoritesOnly: false,
-            requestedCount: 10,
           ),
         ),
-        '03_quiz',
+        '04_listening',
       );
-
-      // 4. Dictionary
       await capture(
-        wrapWithNav(WordsScreen(appState: appState), 1),
-        '04_dictionary',
+        MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: screenshotTheme,
+          home: MatchGameScreen(appState: appState, levelCode: 'A1'),
+        ),
+        '05_match_game',
       );
-
-      // 5. Progress & Achievements
       await capture(
-        wrapWithNav(ProgressScreen(appState: appState), 3),
-        '05_progress',
+        wrapShell(ProgressScreen(appState: appState), 3, isWide),
+        '06_progress',
       );
     }
 
