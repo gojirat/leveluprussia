@@ -166,6 +166,43 @@ void main() {
           fontFamily: 'SFPro',
         ),
       ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: baseTheme.elevatedButtonTheme.style?.copyWith(
+          textStyle: const WidgetStatePropertyAll(
+            TextStyle(
+              fontFamily: 'SFPro',
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+      navigationRailTheme: baseTheme.navigationRailTheme.copyWith(
+        selectedLabelTextStyle: baseTheme
+            .navigationRailTheme.selectedLabelTextStyle
+            ?.copyWith(fontFamily: 'SFPro'),
+        unselectedLabelTextStyle: baseTheme
+            .navigationRailTheme.unselectedLabelTextStyle
+            ?.copyWith(fontFamily: 'SFPro'),
+      ),
+      navigationBarTheme: baseTheme.navigationBarTheme.copyWith(
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return TextStyle(
+            fontFamily: 'SFPro',
+            fontSize: 11.5,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            color: selected ? AppColors.primary : const Color(0xFF6B7280),
+          );
+        }),
+      ),
+      chipTheme: baseTheme.chipTheme.copyWith(
+        labelStyle: const TextStyle(
+          fontFamily: 'SFPro',
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     );
 
     Widget wrapShell(Widget body, int tab, bool isWide) {

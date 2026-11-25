@@ -160,13 +160,24 @@ class _MatchGameScreenState extends State<MatchGameScreen> {
                   color: AppColors.primary.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Text(
-                  '⏱ $_elapsedSeconds с',
-                  style: const TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 14,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.timer_outlined,
+                      size: 16,
+                      color: AppColors.primary,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '$_elapsedSeconds с',
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
